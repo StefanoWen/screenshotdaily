@@ -61,6 +61,14 @@ def main():
     img_files = []
     img_urls = []
     for url in URLS:
+        try:
+            resp = requests.get(url, timeout=10)
+            if resp.status_code != 200:
+                print(f"URL不可访问: {url}，状态码: {resp.status_code}")
+                continue
+        except Exception as e:
+            print(f"URL请求失败: {url}，原因: {e}")
+            continue
         fname = url.replace("https://", "").replace("http://", "").replace("/", "_") + ".png"
         save_path = os.path.join(IMG_DIR, fname)
         take_screenshot(url, save_path)
