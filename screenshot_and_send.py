@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 
 # 你要截图的网址列表，手动填写
 URLS = [
-    # "https://example.com",
+    "https://www.gd.gov.cn",
 ]
 
 # 截图保存目录
@@ -47,7 +47,16 @@ def send_wechat_webhook_markdown(content):
         print(f"Webhook发送失败: {resp}")
         return False
 
+def clear_screenshots_dir():
+    if os.path.exists(IMG_DIR):
+        for f in os.listdir(IMG_DIR):
+            file_path = os.path.join(IMG_DIR, f)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+
 def main():
+    # 先清空截图目录
+    clear_screenshots_dir()
     # 截图
     img_files = []
     img_urls = []
@@ -66,9 +75,6 @@ def main():
     if img_urls:
         md = '# 截图日报\n' + '\n'.join([f'![]({u})' for u in img_urls])
         send_wechat_webhook_markdown(md)
-    # 删除图片
-    for img in img_files:
-        os.remove(img)
 
 if __name__ == "__main__":
     main()
