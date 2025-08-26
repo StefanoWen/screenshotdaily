@@ -46,11 +46,19 @@ jobs:
           # 检查是否有本地缓存的Playwright浏览器
           if [ -d "playwright-cache/chromium" ]; then
             echo "🎯 使用本地缓存的Playwright浏览器"
+            mkdir -p ~/.cache/ms-playwright/
             cp -r playwright-cache/* ~/.cache/ms-playwright/
+            # 确保浏览器可执行权限
+            chmod +x ~/.cache/ms-playwright/chromium-*/chrome-linux/headless_shell
+            chmod +x ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome
           else
             echo "📥 下载并缓存Playwright浏览器"
             PLAYWRIGHT_BROWSERS_PATH=playwright-cache playwright install chromium --with-deps
           fi
+          
+          # 验证Playwright浏览器安装
+          echo "🔍 验证Playwright浏览器安装..."
+          python -c "from playwright.sync_api import sync_playwright; print('Playwright安装成功')"
           
       - name: Configure Git
         run: |
