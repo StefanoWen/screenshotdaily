@@ -46,8 +46,14 @@ jobs:
           # 使用GitHub Actions缓存，启用并行安装和优化选项
           pip install -r requirements.txt --use-pep517 --no-deps --progress-bar off
           
-          # 优化playwright安装，只安装必要的浏览器
-          PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium --with-deps
+          # 检查是否有本地缓存的Playwright浏览器
+          if [ -d "playwright-cache/chromium" ]; then
+            echo "🎯 使用本地缓存的Playwright浏览器"
+            cp -r playwright-cache/* ~/.cache/ms-playwright/
+          else
+            echo "📥 下载并缓存Playwright浏览器"
+            PLAYWRIGHT_BROWSERS_PATH=playwright-cache playwright install chromium --with-deps
+          fi
           
       - name: Configure Git
         run: |
@@ -93,6 +99,22 @@ jobs:
           echo "❌ 脚本执行失败"
           echo "检查日志以获取详细信息"
           exit 1
+          
+      - name: Commit and push Playwright cache
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -d "playwright-cache" ]; then
+            git add -A playwright-cache/
+            if git diff --staged --quiet; then
+              echo "🎯 Playwright缓存无变化"
+            else
+              git commit -m "chore: update playwright cache $(date '+%Y-%m-%d %H:%M:%S')"
+              git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
+              echo "🎯 Playwright缓存已更新"
+            fi
+          fi
           
       - name: Commit and push changes (cleanup)
         if: success()
