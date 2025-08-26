@@ -21,13 +21,15 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 10
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN || secrets.PAT }}
           
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -89,13 +91,15 @@ jobs:
           
       - name: Commit and push changes (cleanup)
         if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git add -A screenshots/
           if git diff --staged --quiet; then
             echo "📁 没有需要提交的截图文件"
           else
             git commit -m "chore: cleanup screenshots after sending $(date '+%Y-%m-%d %H:%M:%S')"
-            git push
+            git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
             echo "📁 已清理截图文件"
           fi
           
