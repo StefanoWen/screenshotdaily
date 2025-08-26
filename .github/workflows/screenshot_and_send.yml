@@ -40,11 +40,8 @@ jobs:
           
       - name: Install dependencies
         run: |
-          # 升级pip并启用并行安装
-          python -m pip install --upgrade pip
-          
-          # 使用GitHub Actions缓存，启用并行安装和优化选项
-          pip install -r requirements.txt --use-pep517 --no-deps --progress-bar off
+          # 安装依赖包，包含所有依赖关系
+          pip install -r requirements.txt --progress-bar off
           
           # 检查是否有本地缓存的Playwright浏览器
           if [ -d "playwright-cache/chromium" ]; then
