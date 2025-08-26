@@ -192,7 +192,7 @@ def send_wechat_webhook_markdown(content: str, config: dict) -> bool:
 
 def clear_screenshots_dir(img_dir: str) -> bool:
     """
-    清空截图目录
+    清空截图目录（仅当目录存在文件时）
     
     Args:
         img_dir: 截图目录路径
@@ -202,11 +202,16 @@ def clear_screenshots_dir(img_dir: str) -> bool:
     """
     try:
         if os.path.exists(img_dir):
-            logger.info(f"清空截图目录: {img_dir}")
-            for f in os.listdir(img_dir):
-                file_path = os.path.join(img_dir, f)
-                if os.path.isfile(file_path):
+            # 检查目录中是否有文件
+            files = [f for f in os.listdir(img_dir) if os.path.isfile(os.path.join(img_dir, f))]
+            if files:
+                logger.info(f"发现截图目录中有 {len(files)} 个文件，开始清理: {img_dir}")
+                for f in files:
+                    file_path = os.path.join(img_dir, f)
                     os.remove(file_path)
+                logger.info("截图目录清理完成")
+            else:
+                logger.info(f"截图目录为空，无需清理: {img_dir}")
         return True
     except Exception as e:
         logger.error(f"清空截图目录失败: {e}")
@@ -375,10 +380,8 @@ def main():
             logger.error("企业微信消息发送失败")
             sys.exit(1)
     
-    # CI模式下清理截图
-    if config['ci_mode'] and img_files and not args.no_cleanup:
-        logger.info("CI模式：清理截图文件...")
-        clear_screenshots_dir(args.img_dir)
+    # 程序运行结束后不再清理截图目录
+    logger.info("程序运行完成，保留截图文件")
     
     logger.info("任务执行完成")
     
