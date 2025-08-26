@@ -44,7 +44,7 @@ def get_env_config():
         'ci_mode': os.getenv("CI", "false").lower() == "true",
     }
 
-def take_screenshot(url: str, save_path: str, config: dict) -> bool:
+def take_screenshot(url: str, save_path: str, config: dict, width: int = 1920, height: int = 1080) -> bool:
     """
     对指定URL进行截图
     
@@ -52,11 +52,17 @@ def take_screenshot(url: str, save_path: str, config: dict) -> bool:
         url: 目标网址
         save_path: 截图保存路径
         config: 配置字典
+        width: 截图宽度
+        height: 截图高度
     
     Returns:
         bool: 截图是否成功
     """
-    logger.info(f"开始截图: {url}")
+    logger.info(f"开始截图: {url} (尺寸: {width}x{height})")
+    
+    # 截图尺寸配置
+    screenshot_width = width
+    screenshot_height = height
     
     try:
         with sync_playwright() as p:
@@ -85,7 +91,12 @@ def take_screenshot(url: str, save_path: str, config: dict) -> bool:
                 args=launch_args
             )
             
+            # 创建页面并设置视窗大小
             page = browser.new_page()
+            page.set_viewport_size({
+                "width": screenshot_width,
+                "height": screenshot_height
+            })
             
             # 设置超时时间
             page.set_default_timeout(60000)
@@ -274,6 +285,8 @@ def main():
     parser = argparse.ArgumentParser(description='自动截图并发送到企业微信')
     parser.add_argument('--urls', nargs='*', help='要截图的URL列表')
     parser.add_argument('--img-dir', default=DEFAULT_IMG_DIR, help='截图保存目录')
+    parser.add_argument('--width', type=int, default=1920, help='截图宽度 (默认: 1920)')
+    parser.add_argument('--height', type=int, default=1080, help='截图高度 (默认: 1080)')
     parser.add_argument('--no-webhook', action='store_true', help='不发送webhook消息')
     parser.add_argument('--no-cleanup', action='store_true', help='不清空截图目录')
     parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
@@ -320,7 +333,7 @@ def main():
         save_path = os.path.join(args.img_dir, fname)
         
         # 执行截图
-        if take_screenshot(url, save_path, config):
+        if take_screenshot(url, save_path, config, args.width, args.height):
             img_files.append(save_path)
             success_count += 1
             

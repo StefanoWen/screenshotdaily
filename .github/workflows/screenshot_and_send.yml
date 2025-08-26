@@ -79,7 +79,7 @@ jobs:
           CI: true
           DEBUG_LOCAL: false
         run: |
-          python screenshot_and_send.py ${{ steps.build_args.outputs.args }}
+          python screenshot_and_send.py ${{ steps.build_args.outputs.args }} --width 1920 --height 1080
         continue-on-error: true
         
       - name: Check script execution result

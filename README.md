@@ -75,6 +75,8 @@ python screenshot_and_send.py --no-cleanup
 |------|------|------|
 | `--urls` | 要截图的URL列表 | `--urls https://a.com https://b.com` |
 | `--img-dir` | 截图保存目录 | `--img-dir custom_screenshots` |
+| `--width` | 截图宽度 (默认: 1920) | `--width 1920` |
+| `--height` | 截图高度 (默认: 1080) | `--height 1080` |
 | `--no-webhook` | 不发送webhook消息 | `--no-webhook` |
 | `--no-cleanup` | 不清空截图目录 | `--no-cleanup` |
 | `--verbose, -v` | 启用详细日志 | `--verbose` |
