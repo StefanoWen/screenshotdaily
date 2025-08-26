@@ -40,14 +40,14 @@ jobs:
           
       - name: Install dependencies
         run: |
-          # 使用国内镜像源升级pip
-          python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+          # 升级pip并启用并行安装
+          python -m pip install --upgrade pip
           
-          # 使用国内镜像源安装依赖，启用缓存和并行安装
-          pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir --use-deprecated=legacy-resolver
+          # 使用GitHub Actions缓存，启用并行安装和优化选项
+          pip install -r requirements.txt --use-pep517 --no-deps --progress-bar off
           
-          # 优化playwright安装，只安装必要的浏览器和依赖
-          PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium
+          # 优化playwright安装，只安装必要的浏览器
+          PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium --with-deps
           
       - name: Configure Git
         run: |
