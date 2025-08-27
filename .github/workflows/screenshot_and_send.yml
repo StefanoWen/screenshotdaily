@@ -44,13 +44,16 @@ jobs:
           pip install -r requirements.txt --progress-bar off
           
           # 检查是否有本地缓存的Playwright浏览器
-          if [ -d "playwright-cache/chromium" ]; then
+          if [ -d "playwright-cache" ] && [ "$(ls -A playwright-cache)" ]; then
             echo "🎯 使用本地缓存的Playwright浏览器"
             mkdir -p ~/.cache/ms-playwright/
             cp -r playwright-cache/* ~/.cache/ms-playwright/
             # 确保浏览器可执行权限
-            chmod +x ~/.cache/ms-playwright/chromium-*/chrome-linux/headless_shell
-            chmod +x ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome
+            find ~/.cache/ms-playwright/ -name "headless_shell" -exec chmod +x {} \;
+            find ~/.cache/ms-playwright/ -name "chrome" -exec chmod +x {} \;
+            # 列出缓存内容用于调试
+            echo "📋 缓存内容:"
+            ls -la ~/.cache/ms-playwright/
           else
             echo "📥 下载并缓存Playwright浏览器"
             PLAYWRIGHT_BROWSERS_PATH=playwright-cache playwright install chromium --with-deps
@@ -58,7 +61,7 @@ jobs:
           
           # 验证Playwright浏览器安装
           echo "🔍 验证Playwright浏览器安装..."
-          python -c "from playwright.sync_api import sync_playwright; print('Playwright安装成功')"
+          python -c "import os; from playwright.sync_api import sync_playwright; print('Playwright模块导入成功'); browser_path = os.path.expanduser('~/.cache/ms-playwright'); print(f'浏览器缓存目录: {browser_path}'); [print(f'找到浏览器文件: {os.path.join(root, file)}') for root, dirs, files in os.walk(browser_path) for file in files if file in ['headless_shell', 'chrome']] if os.path.exists(browser_path) else print('浏览器缓存目录不存在')"
           
       - name: Configure Git
         run: |
