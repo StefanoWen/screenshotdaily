@@ -91,7 +91,7 @@ jobs:
           echo "检查日志以获取详细信息"
           exit 1
           
-      - name: Commit and push changes (cleanup)
+      - name: Commit and push screenshots
         if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,9 +100,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "📁 没有需要提交的截图文件"
           else
-            git commit -m "chore: cleanup screenshots after sending $(date '+%Y-%m-%d %H:%M:%S')"
+            git commit -m "feat: add screenshots $(date '+%Y-%m-%d %H:%M:%S')"
             git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
-            echo "📁 已清理截图文件"
+            echo "📁 截图文件已提交到仓库"
           fi
           
       - name: Summary
