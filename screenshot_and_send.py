@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # 默认配置
 DEFAULT_URLS = [
-    "https://www.gd.gov.cn/",
+    "https://www.gd.gov.cn",
     "https://zfsg.gd.gov.cn",
     "https://www.gdjct.gd.gov.cn",
     "https://www.gdzz.gov.cn",
