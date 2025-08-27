@@ -131,17 +131,24 @@ def take_screenshot(url: str, save_path: str, config: dict, width: int = 1920, h
                 
             except Exception as e:
                 logger.error(f"截图失败 {url}: {e}")
-                # 重试机制
-                try:
-                    logger.info(f"尝试重试截图: {url}")
-                    page.goto(url, wait_until="commit", timeout=30000)
-                    time.sleep(2)
-                    page.screenshot(path=save_path, full_page=False, timeout=30000)
-                    logger.info(f"重试截图成功: {url}")
-                    return True
-                except Exception as retry_e:
-                    logger.error(f"重试截图也失败 {url}: {retry_e}")
-                    return False
+                
+                # 五次重试机制
+                max_retries = 5
+                for retry in range(1, max_retries + 1):
+                    try:
+                        logger.info(f"第 {retry} 次重试截图: {url}")
+                        page.goto(url, wait_until="commit", timeout=30000)
+                        time.sleep(2)
+                        page.screenshot(path=save_path, full_page=False, timeout=30000)
+                        logger.info(f"第 {retry} 次重试截图成功: {url}")
+                        return True
+                    except Exception as retry_e:
+                        logger.error(f"第 {retry} 次重试截图失败 {url}: {retry_e}")
+                        if retry == max_retries:
+                            logger.error(f"截图重试 {max_retries} 次后仍然失败，放弃截图: {url}")
+                            return False
+                        time.sleep(1)  # 重试间隔
+                
             finally:
                 browser.close()
                 
