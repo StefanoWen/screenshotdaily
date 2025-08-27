@@ -100,9 +100,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "📁 没有需要提交的截图文件"
           else
-            git commit -m "feat: add screenshots $(date '+%Y-%m-%d %H:%M:%S')"
+            git commit -m "feat: update screenshots $(date '+%Y-%m-%d %H:%M:%S')"
             git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
-            echo "📁 截图文件已提交到仓库"
+            echo "📁 截图文件已强制覆盖并提交到仓库"
           fi
           
       - name: Summary

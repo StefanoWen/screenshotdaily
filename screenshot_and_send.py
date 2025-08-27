@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-自动访问网址截图、推送到 GitHub、发送到企业微信并清理图片
+自动访问网址截图、推送到 GitHub、发送到企业微信
 支持CI环境自动调用和本地调试
 """
 import os
@@ -197,33 +197,6 @@ def send_wechat_webhook_markdown(content: str, config: dict) -> bool:
         logger.error(f"Webhook发送异常: {e}")
         return False
 
-def clear_screenshots_dir(img_dir: str) -> bool:
-    """
-    清空截图目录（仅当目录存在文件时）
-    
-    Args:
-        img_dir: 截图目录路径
-    
-    Returns:
-        bool: 清空是否成功
-    """
-    try:
-        if os.path.exists(img_dir):
-            # 检查目录中是否有文件
-            files = [f for f in os.listdir(img_dir) if os.path.isfile(os.path.join(img_dir, f))]
-            if files:
-                logger.info(f"发现截图目录中有 {len(files)} 个文件，开始清理: {img_dir}")
-                for f in files:
-                    file_path = os.path.join(img_dir, f)
-                    os.remove(file_path)
-                logger.info("截图目录清理完成")
-            else:
-                logger.info(f"截图目录为空，无需清理: {img_dir}")
-        return True
-    except Exception as e:
-        logger.error(f"清空截图目录失败: {e}")
-        return False
-
 def check_url_accessibility(url: str, timeout: int = 10) -> bool:
     """
     检查URL是否可访问
@@ -306,7 +279,6 @@ def main():
     parser.add_argument('--width', type=int, default=1920, help='截图宽度 (默认: 1920)')
     parser.add_argument('--height', type=int, default=1080, help='截图高度 (默认: 1080)')
     parser.add_argument('--no-webhook', action='store_true', help='不发送webhook消息')
-    parser.add_argument('--no-cleanup', action='store_true', help='不清空截图目录')
     parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     
     args = parser.parse_args()
@@ -330,11 +302,8 @@ def main():
     logger.info(f"CI模式: {config['ci_mode']}")
     logger.info(f"本地调试: {config['debug_local']}")
     
-    # 清空截图目录
-    if not args.no_cleanup:
-        if not clear_screenshots_dir(args.img_dir):
-            logger.error("清空截图目录失败，程序退出")
-            sys.exit(1)
+    # 不再清空截图目录，直接覆盖现有文件
+    logger.info("跳过清空截图目录，将直接覆盖现有文件")
     
     # 截图任务
     img_files = []
