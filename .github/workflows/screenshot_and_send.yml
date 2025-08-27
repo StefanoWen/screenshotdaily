@@ -2,7 +2,7 @@ name: Screenshot and Send to WeChat
 
 on:
   schedule:
-    - cron: '0 2 * * *' # 每天北京时间10点执行
+    - cron: '0 8 * * *' # 每天北京时间10点执行
   workflow_dispatch:
     inputs:
       urls:
