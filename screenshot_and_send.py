@@ -104,9 +104,13 @@ def take_screenshot(url: str, save_path: str, config: dict, width: int = 1920, h
                 "height": screenshot_height
             })
             
-            # 设置超时时间
-            page.set_default_timeout(60000)
-            page.set_default_navigation_timeout(90000)
+            # 设置超时时间 - CI环境使用更长超时
+            if config['ci_mode']:
+                page.set_default_timeout(120000)  # CI环境：120秒
+                page.set_default_navigation_timeout(180000)  # CI环境：180秒
+            else:
+                page.set_default_timeout(60000)  # 本地：60秒
+                page.set_default_navigation_timeout(90000)  # 本地：90秒
             
             # 设置User-Agent
             page.set_extra_http_headers({
@@ -114,32 +118,42 @@ def take_screenshot(url: str, save_path: str, config: dict, width: int = 1920, h
             })
             
             try:
-                # 使用domcontentloaded策略
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                time.sleep(3)
+                # 使用domcontentloaded策略 - CI环境使用更长超时
+                goto_timeout = 90000 if config['ci_mode'] else 60000
+                sleep_time = 5 if config['ci_mode'] else 3
+                body_timeout = 20000 if config['ci_mode'] else 10000
+                screenshot_timeout = 60000 if config['ci_mode'] else 30000
+                
+                page.goto(url, wait_until="domcontentloaded", timeout=goto_timeout)
+                time.sleep(sleep_time)
                 
                 # 等待主要内容加载
                 try:
-                    page.wait_for_selector('body', timeout=10000)
+                    page.wait_for_selector('body', timeout=body_timeout)
                 except:
                     logger.warning(f"无法找到body元素，但仍尝试截图: {url}")
                 
                 # 截图
-                page.screenshot(path=save_path, full_page=False, timeout=30000)
+                page.screenshot(path=save_path, full_page=False, timeout=screenshot_timeout)
                 logger.info(f"截图成功: {url}")
                 return True
                 
             except Exception as e:
                 logger.error(f"截图失败 {url}: {e}")
                 
-                # 五次重试机制
+                # 五次重试机制 - CI环境使用更长超时和间隔
                 max_retries = 5
                 for retry in range(1, max_retries + 1):
                     try:
                         logger.info(f"第 {retry} 次重试截图: {url}")
-                        page.goto(url, wait_until="commit", timeout=30000)
-                        time.sleep(2)
-                        page.screenshot(path=save_path, full_page=False, timeout=30000)
+                        # CI环境使用更长超时
+                        goto_timeout = 60000 if config['ci_mode'] else 30000
+                        screenshot_timeout = 60000 if config['ci_mode'] else 30000
+                        retry_interval = 5 if config['ci_mode'] else 1
+                        
+                        page.goto(url, wait_until="commit", timeout=goto_timeout)
+                        time.sleep(retry_interval)
+                        page.screenshot(path=save_path, full_page=False, timeout=screenshot_timeout)
                         logger.info(f"第 {retry} 次重试截图成功: {url}")
                         return True
                     except Exception as retry_e:
@@ -147,7 +161,9 @@ def take_screenshot(url: str, save_path: str, config: dict, width: int = 1920, h
                         if retry == max_retries:
                             logger.error(f"截图重试 {max_retries} 次后仍然失败，放弃截图: {url}")
                             return False
-                        time.sleep(1)  # 重试间隔
+                        # CI环境使用更长重试间隔
+                        retry_interval = 5 if config['ci_mode'] else 1
+                        time.sleep(retry_interval)
                 
             finally:
                 browser.close()
