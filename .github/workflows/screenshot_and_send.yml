@@ -15,17 +15,12 @@ on:
         required: false
         default: false
         type: boolean
-      update-playwright:
-        description: '强制更新Playwright二进制文件'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   screenshot_and_send:
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
       contents: write
     
@@ -48,72 +43,8 @@ jobs:
           # 安装依赖包，包含所有依赖关系
           pip install -r requirements.txt --progress-bar off
           
-      - name: Check Playwright binary updates
-        id: check_updates
-        run: |
-          echo "🔍 检查Playwright二进制文件更新..."
-          
-          # 检查是否需要强制更新
-          if [ "${{ github.event.inputs.update-playwright }}" = "true" ]; then
-            echo "📥 强制更新模式：下载最新Playwright二进制文件"
-            echo "UPDATE_NEEDED=true" >> $GITHUB_OUTPUT
-          else
-            # 使用Python脚本检查二进制文件
-            UPDATE_CHECK=$(python check_playwright.py)
-            echo "$UPDATE_CHECK"
-            echo "$UPDATE_CHECK" >> $GITHUB_OUTPUT
-          fi
-          
-      - name: Download and update Playwright binaries
-        if: steps.check_updates.outputs.UPDATE_NEEDED == 'true'
-        run: |
-          echo "📥 下载最新Playwright二进制文件..."
-          
-          # 清理旧的二进制文件
-          rm -rf playwright-binaries
-          mkdir -p playwright-binaries
-          
-          # 下载Playwright浏览器到临时目录
-          PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-temp playwright install chromium --with-deps
-          
-          # 复制二进制文件到项目目录（只复制必要的文件）
-          cp -r /tmp/playwright-temp/* playwright-binaries/
-          
-          # 设置执行权限
-          find playwright-binaries/ -name "headless_shell" -exec chmod +x {} \;
-          find playwright-binaries/ -name "chrome" -exec chmod +x {} \;
-          
-          # 列出二进制文件内容
-          echo "📋 已下载的二进制文件:"
-          ls -la playwright-binaries/
-          find playwright-binaries/ -type f -name "*.so" -o -name "headless_shell" -o -name "chrome" | head -10
-          
-          # 清理临时文件
-          rm -rf /tmp/playwright-temp
-          
-      - name: Setup Playwright from local binaries
-        run: |
-          echo "🎯 从本地二进制文件设置Playwright..."
-          
-          # 创建系统缓存目录
-          mkdir -p ~/.cache/ms-playwright/
-          
-          # 复制二进制文件到系统目录
-          if [ -d "playwright-binaries" ]; then
-            cp -r playwright-binaries/* ~/.cache/ms-playwright/
-            echo "✅ 二进制文件复制完成"
-          else
-            echo "❌ 二进制文件目录不存在"
-            exit 1
-          fi
-          
-          # 确保执行权限
-          find ~/.cache/ms-playwright/ -name "headless_shell" -exec chmod +x {} \;
-          find ~/.cache/ms-playwright/ -name "chrome" -exec chmod +x {} \;
-          
-          # 验证Playwright安装
-          echo "🔍 验证Playwright安装..."
-          python check_playwright.py verify
+          # 安装Playwright浏览器
+          playwright install chromium --with-deps
           
       - name: Configure Git
         run: |
@@ -160,50 +91,6 @@ jobs:
           echo "检查日志以获取详细信息"
           exit 1
           
-      - name: Commit and push Playwright binaries (with retry)
-        if: steps.check_updates.outputs.UPDATE_NEEDED == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -d "playwright-binaries" ]; then
-            git add -A playwright-binaries/
-            if git diff --staged --quiet; then
-              echo "🎯 Playwright二进制文件无变化"
-            else
-              echo "📤 尝试提交Playwright二进制文件..."
-              git commit -m "chore: update playwright binaries $(date '+%Y-%m-%d %H:%M:%S')"
-              
-              # 计算文件大小
-              TOTAL_SIZE=$(du -sk playwright-binaries/ | cut -f1)
-              echo "📊 二进制文件总大小: ${TOTAL_SIZE}KB"
-              
-              # 尝试推送，设置更长的超时时间
-              echo "📤 尝试推送二进制文件（第一次尝试）..."
-              if git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main --timeout=600; then
-                echo "✅ Playwright二进制文件已成功推送到仓库"
-              else
-                echo "⚠️ 第一次推送失败，尝试清理不必要的文件..."
-                
-                # 清理一些不必要的文件以减少大小
-                find playwright-binaries/ -name "*.pdb" -delete
-                find playwright-binaries/ -name "*.debug" -delete
-                find playwright-binaries/ -name "*.map" -delete
-                
-                # 重新提交
-                git add -A playwright-binaries/
-                git commit -m "chore: update playwright binaries (optimized) $(date '+%Y-%m-%d %H:%M:%S')"
-                
-                echo "📤 尝试推送优化后的二进制文件（第二次尝试）..."
-                if git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main --timeout=600; then
-                  echo "✅ Playwright二进制文件（优化版）已成功推送到仓库"
-                else
-                  echo "❌ 推送失败，但CI任务继续执行"
-                  echo "💡 建议：手动清理仓库中的大文件或使用Git LFS"
-                fi
-              fi
-            fi
-          fi
-          
       - name: Commit and push changes (cleanup)
         if: success()
         env:
@@ -227,7 +114,6 @@ jobs:
           echo "- **执行状态**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **仓库**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
           echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Playwright二进制更新**: ${{ steps.check_updates.outputs.UPDATE_NEEDED }}" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ steps.screenshot_script.outcome }}" = "success" ]; then
             echo "- ✅ **截图任务**: 成功完成" >> $GITHUB_STEP_SUMMARY
