@@ -15,12 +15,17 @@ on:
         required: false
         default: false
         type: boolean
+      update-playwright:
+        description: '强制更新Playwright二进制文件'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   screenshot_and_send:
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
     
@@ -43,25 +48,72 @@ jobs:
           # 安装依赖包，包含所有依赖关系
           pip install -r requirements.txt --progress-bar off
           
-          # 检查是否有本地缓存的Playwright浏览器
-          if [ -d "playwright-cache" ] && [ "$(ls -A playwright-cache)" ]; then
-            echo "🎯 使用本地缓存的Playwright浏览器"
-            mkdir -p ~/.cache/ms-playwright/
-            cp -r playwright-cache/* ~/.cache/ms-playwright/
-            # 确保浏览器可执行权限
-            find ~/.cache/ms-playwright/ -name "headless_shell" -exec chmod +x {} \;
-            find ~/.cache/ms-playwright/ -name "chrome" -exec chmod +x {} \;
-            # 列出缓存内容用于调试
-            echo "📋 缓存内容:"
-            ls -la ~/.cache/ms-playwright/
+      - name: Check Playwright binary updates
+        id: check_updates
+        run: |
+          echo "🔍 检查Playwright二进制文件更新..."
+          
+          # 检查是否需要强制更新
+          if [ "${{ github.event.inputs.update-playwright }}" = "true" ]; then
+            echo "📥 强制更新模式：下载最新Playwright二进制文件"
+            echo "UPDATE_NEEDED=true" >> $GITHUB_OUTPUT
           else
-            echo "📥 下载并缓存Playwright浏览器"
-            PLAYWRIGHT_BROWSERS_PATH=playwright-cache playwright install chromium --with-deps
+            # 使用Python脚本检查二进制文件
+            UPDATE_CHECK=$(python check_playwright.py)
+            echo "$UPDATE_CHECK"
+            echo "$UPDATE_CHECK" >> $GITHUB_OUTPUT
           fi
           
-          # 验证Playwright浏览器安装
-          echo "🔍 验证Playwright浏览器安装..."
-          python -c "import os; from playwright.sync_api import sync_playwright; print('Playwright模块导入成功'); browser_path = os.path.expanduser('~/.cache/ms-playwright'); print(f'浏览器缓存目录: {browser_path}'); [print(f'找到浏览器文件: {os.path.join(root, file)}') for root, dirs, files in os.walk(browser_path) for file in files if file in ['headless_shell', 'chrome']] if os.path.exists(browser_path) else print('浏览器缓存目录不存在')"
+      - name: Download and update Playwright binaries
+        if: steps.check_updates.outputs.UPDATE_NEEDED == 'true'
+        run: |
+          echo "📥 下载最新Playwright二进制文件..."
+          
+          # 清理旧的二进制文件
+          rm -rf playwright-binaries
+          mkdir -p playwright-binaries
+          
+          # 下载Playwright浏览器到临时目录
+          PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-temp playwright install chromium --with-deps
+          
+          # 复制二进制文件到项目目录
+          cp -r /tmp/playwright-temp/* playwright-binaries/
+          
+          # 设置执行权限
+          find playwright-binaries/ -name "headless_shell" -exec chmod +x {} \;
+          find playwright-binaries/ -name "chrome" -exec chmod +x {} \;
+          
+          # 列出二进制文件内容
+          echo "📋 已下载的二进制文件:"
+          ls -la playwright-binaries/
+          find playwright-binaries/ -type f -name "*.so" -o -name "headless_shell" -o -name "chrome" | head -10
+          
+          # 清理临时文件
+          rm -rf /tmp/playwright-temp
+          
+      - name: Setup Playwright from local binaries
+        run: |
+          echo "🎯 从本地二进制文件设置Playwright..."
+          
+          # 创建系统缓存目录
+          mkdir -p ~/.cache/ms-playwright/
+          
+          # 复制二进制文件到系统目录
+          if [ -d "playwright-binaries" ]; then
+            cp -r playwright-binaries/* ~/.cache/ms-playwright/
+            echo "✅ 二进制文件复制完成"
+          else
+            echo "❌ 二进制文件目录不存在"
+            exit 1
+          fi
+          
+          # 确保执行权限
+          find ~/.cache/ms-playwright/ -name "headless_shell" -exec chmod +x {} \;
+          find ~/.cache/ms-playwright/ -name "chrome" -exec chmod +x {} \;
+          
+          # 验证Playwright安装
+          echo "🔍 验证Playwright安装..."
+          python check_playwright.py verify
           
       - name: Configure Git
         run: |
@@ -108,19 +160,19 @@ jobs:
           echo "检查日志以获取详细信息"
           exit 1
           
-      - name: Commit and push Playwright cache
-        if: always()
+      - name: Commit and push Playwright binaries
+        if: steps.check_updates.outputs.UPDATE_NEEDED == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -d "playwright-cache" ]; then
-            git add -A playwright-cache/
+          if [ -d "playwright-binaries" ]; then
+            git add -A playwright-binaries/
             if git diff --staged --quiet; then
-              echo "🎯 Playwright缓存无变化"
+              echo "🎯 Playwright二进制文件无变化"
             else
-              git commit -m "chore: update playwright cache $(date '+%Y-%m-%d %H:%M:%S')"
+              git commit -m "chore: update playwright binaries $(date '+%Y-%m-%d %H:%M:%S')"
               git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
-              echo "🎯 Playwright缓存已更新"
+              echo "🎯 Playwright二进制文件已更新并推送到仓库"
             fi
           fi
           
@@ -147,6 +199,7 @@ jobs:
           echo "- **执行状态**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **仓库**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
           echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Playwright二进制更新**: ${{ steps.check_updates.outputs.UPDATE_NEEDED }}" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ steps.screenshot_script.outcome }}" = "success" ]; then
             echo "- ✅ **截图任务**: 成功完成" >> $GITHUB_STEP_SUMMARY
