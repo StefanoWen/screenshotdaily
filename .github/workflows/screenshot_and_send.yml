@@ -105,6 +105,24 @@ jobs:
             echo "📁 截图文件已强制覆盖并提交到仓库"
           fi
           
+      - name: Send webhook message
+        if: success() && steps.screenshot_script.outcome == 'success'
+        env:
+          WEBHOOK_KEY: ${{ secrets.WEBHOOK_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          CI: true
+        run: |
+          echo "📤 发送企业微信webhook消息..."
+          python -c "
+          import sys
+          sys.path.append('.')
+          from screenshot_and_send import send_webhook_from_file, get_env_config
+          config = get_env_config()
+          success = send_webhook_from_file(config, 'image_urls.txt')
+          sys.exit(0 if success else 1)
+          "
+          
       - name: Summary
         if: always()
         run: |
@@ -119,4 +137,12 @@ jobs:
             echo "- ✅ **截图任务**: 成功完成" >> $GITHUB_STEP_SUMMARY
           else
             echo "- ❌ **截图任务**: 执行失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.send_webhook_message.outcome }}" = "success" ]; then
+            echo "- ✅ **Webhook发送**: 成功完成" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.send_webhook_message.outcome }}" = "failure" ]; then
+            echo "- ❌ **Webhook发送**: 执行失败" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ **Webhook发送**: 未执行" >> $GITHUB_STEP_SUMMARY
           fi

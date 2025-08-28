@@ -251,6 +251,57 @@ def generate_github_image_url(repo: str, branch: str, img_dir: str, filename: st
     """
     return f"https://raw.githubusercontent.com/{repo}/{branch}/{img_dir}/{filename}"
 
+def save_image_urls_to_file(img_urls: List[str], file_path: str = "image_urls.txt") -> bool:
+    """
+    保存图片URL列表到文件
+    
+    Args:
+        img_urls: 图片URL列表
+        file_path: 文件保存路径
+    
+    Returns:
+        bool: 保存是否成功
+    """
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            for url in img_urls:
+                f.write(url + '\n')
+        logger.info(f"图片URL已保存到文件: {file_path}")
+        return True
+    except Exception as e:
+        logger.error(f"保存图片URL到文件失败: {e}")
+        return False
+
+def send_webhook_from_file(config: dict, file_path: str = "image_urls.txt") -> bool:
+    """
+    从文件读取图片URL并发送webhook消息
+    
+    Args:
+        config: 配置字典
+        file_path: 文件路径
+    
+    Returns:
+        bool: 发送是否成功
+    """
+    try:
+        if not os.path.exists(file_path):
+            logger.warning(f"图片URL文件不存在: {file_path}")
+            return False
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            img_urls = [line.strip() for line in f if line.strip()]
+        
+        if not img_urls:
+            logger.warning("图片URL文件为空")
+            return False
+        
+        md = '# 📸 截图日报\n\n' + '\n'.join([f'![]({u})' for u in img_urls])
+        return send_wechat_webhook_markdown(md, config)
+        
+    except Exception as e:
+        logger.error(f"从文件发送webhook失败: {e}")
+        return False
+
 def commit_and_push_screenshots(img_dir: str) -> bool:
     """
     提交并推送截图到GitHub
@@ -354,7 +405,11 @@ def main():
     
     logger.info(f"截图完成，成功: {success_count}/{len(urls)}")
     
-    # 本地调试模式下推送截图
+    # 保存图片URL到文件（CI环境下）
+    if config['ci_mode'] and img_urls:
+        save_image_urls_to_file(img_urls)
+    
+    # 本地调试模式下推送截图并发送webhook
     if config['debug_local'] and img_files:
         if not commit_and_push_screenshots(args.img_dir):
             logger.error("推送截图失败")
@@ -362,15 +417,19 @@ def main():
             # 等待GitHub同步
             logger.info("等待GitHub同步...")
             time.sleep(5)
+        
+        # 发送webhook消息（本地调试模式）
+        if img_urls and not args.no_webhook:
+            md = '# 📸 截图日报\n\n' + '\n'.join([f'![]({u})' for u in img_urls])
+            if send_wechat_webhook_markdown(md, config):
+                logger.info("企业微信消息发送成功")
+            else:
+                logger.error("企业微信消息发送失败")
+                sys.exit(1)
     
-    # 发送webhook消息
-    if img_urls and not args.no_webhook:
-        md = '# 📸 截图日报\n\n' + '\n'.join([f'![]({u})' for u in img_urls])
-        if send_wechat_webhook_markdown(md, config):
-            logger.info("企业微信消息发送成功")
-        else:
-            logger.error("企业微信消息发送失败")
-            sys.exit(1)
+    # CI环境下不立即发送webhook，由后续步骤处理
+    if config['ci_mode'] and img_urls and not args.no_webhook:
+        logger.info("CI模式下已保存图片URL到文件，将由后续步骤发送webhook")
     
     # 程序运行结束后不再清理截图目录
     logger.info("程序运行完成，保留截图文件")
