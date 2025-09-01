@@ -2,7 +2,7 @@ name: Screenshot and Send to WeChat
 
 on:
   schedule:
-    - cron: '0 8 * * *' # 每天北京时间10点执行
+    - cron: '0 8 * * *' # 每天北京时间16点执行
   workflow_dispatch:
     inputs:
       urls:
@@ -97,13 +97,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git add -A screenshots/
-          if git diff --staged --quiet; then
-            echo "📁 没有需要提交的截图文件"
-          else
-            git commit -m "feat: update screenshots $(date '+%Y-%m-%d %H:%M:%S')"
-            git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
-            echo "📁 截图文件已强制覆盖并提交到仓库"
-          fi
+          git commit -m "feat: update screenshots $(date '+%Y-%m-%d %H:%M:%S')" --allow-empty
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
+          echo "📁 截图文件已强制提交到仓库"
           
       - name: Send webhook message
         if: success() && steps.screenshot_script.outcome == 'success'
