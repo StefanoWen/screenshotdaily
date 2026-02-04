@@ -2,7 +2,7 @@ name: Screenshot and Send to WeChat
 
 on:
   schedule:
-    - cron: '0 8 * * *' # 每天北京时间16点执行
+    - cron: '0 8 * * *'  # 每天北京时间16点执行
   workflow_dispatch:
     inputs:
       urls:
@@ -23,55 +23,84 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN || secrets.PAT }}
-          
+
+      # ─────────────── 缓存 pip 依赖 ───────────────
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ─────────────── 设置 Python ───────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
-          cache-dependency-path: 'requirements.txt'
-          
+
+      # ─────────────── 缓存 Playwright 浏览器 ───────────────
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      # ─────────────── 安装依赖和 Playwright ───────────────
       - name: Install dependencies
         run: |
-          # 安装依赖包，包含所有依赖关系
+          # 升级 pip 并安装项目依赖
+          python -m pip install --upgrade pip
           pip install -r requirements.txt --progress-bar off
-          
-          # 安装Playwright浏览器
-          playwright install chromium --with-deps
-          
+
+          # 安装系统依赖（playwright install-deps 很快，通常几秒）
+          playwright install-deps
+
+          # 只有当 Playwright 浏览器缓存未命中时才安装浏览器
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            echo "Playwright browsers cache miss → installing browsers..."
+            playwright install chromium --with-deps
+          else
+            echo "Playwright browsers restored from cache → skipping installation"
+          fi
+
       - name: Configure Git
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          
+
       - name: Build command arguments
         id: build_args
         run: |
           ARGS=""
-          
+
           # 处理URL参数
           if [ -n "${{ github.event.inputs.urls }}" ]; then
             ARGS="$ARGS --urls ${{ github.event.inputs.urls }}"
           fi
-          
+
           # 处理详细日志参数
           if [ "${{ github.event.inputs.verbose }}" = "true" ]; then
             ARGS="$ARGS --verbose"
           fi
-          
+
           # 设置CI环境变量
           echo "CI=true" >> $GITHUB_ENV
           echo "DEBUG_LOCAL=false" >> $GITHUB_ENV
-          
+
           echo "args=$ARGS" >> $GITHUB_OUTPUT
-          
+
       - name: Run screenshot and send script
         id: screenshot_script
         env:
@@ -83,14 +112,14 @@ jobs:
         run: |
           python screenshot_and_send.py ${{ steps.build_args.outputs.args }} --width 1920 --height 1080
         continue-on-error: true
-        
+
       - name: Check script execution result
         if: steps.screenshot_script.outcome == 'failure'
         run: |
           echo "❌ 脚本执行失败"
           echo "检查日志以获取详细信息"
           exit 1
-          
+
       - name: Commit and push screenshots
         if: success()
         env:
@@ -98,9 +127,9 @@ jobs:
         run: |
           git add -A screenshots/
           git commit -m "feat: update screenshots $(date '+%Y-%m-%d %H:%M:%S')" --allow-empty
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
           echo "📁 截图文件已强制提交到仓库"
-          
+
       - name: Send webhook message
         if: success() && steps.screenshot_script.outcome == 'success'
         env:
@@ -118,7 +147,7 @@ jobs:
           success = send_webhook_from_file(config, 'image_urls.txt')
           sys.exit(0 if success else 1)
           "
-          
+
       - name: Summary
         if: always()
         run: |
@@ -128,13 +157,13 @@ jobs:
           echo "- **执行状态**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **仓库**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
           echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ "${{ steps.screenshot_script.outcome }}" = "success" ]; then
             echo "- ✅ **截图任务**: 成功完成" >> $GITHUB_STEP_SUMMARY
           else
             echo "- ❌ **截图任务**: 执行失败" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ "${{ steps.send_webhook_message.outcome }}" = "success" ]; then
             echo "- ✅ **Webhook发送**: 成功完成" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ steps.send_webhook_message.outcome }}" = "failure" ]; then
